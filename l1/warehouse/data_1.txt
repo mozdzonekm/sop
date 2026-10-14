@@ -1,0 +1,5 @@
+origin:Dolina Mgieł
+name:Korzeń Mandragory
+rarity:legendary
+type:botanical
+incipit:Rare root harvested during full moon

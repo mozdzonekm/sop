@@ -1,0 +1,5 @@
+origin:Dolina Mgieł
+name:sword
+rarity:normal
+type:weapon
+incipit:Rare root harvested during full moon

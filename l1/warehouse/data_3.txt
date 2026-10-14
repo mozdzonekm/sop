@@ -1,0 +1,5 @@
+origin:Dolina Mgieł
+name:armor
+rarity:rare
+type:armor
+incipit:Rare root harvested during full moon
