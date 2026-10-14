@@ -1,0 +1,4 @@
+origin:Krypta Płomienia
+name:Esencja Wiecznego Płomienia Królewskiej Katedry Zniszczenia i Przemiany Wieczności
+rarity:mythic
+type:potion

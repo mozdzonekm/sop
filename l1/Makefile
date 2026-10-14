@@ -12,4 +12,4 @@ lab1: lab1.c
 	gcc -Wall -fsanitize=address,undefined -o lab1 lab1.c
 .PHONY: clean all
 clean:
-	rm prog1 prog2 prog3
+	rm prog1 prog2 prog3 lab1

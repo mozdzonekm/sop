@@ -1,5 +1,6 @@
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <linux/limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -7,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #define ERR(source)                                                            \
@@ -239,9 +241,102 @@ void create_index(char *warehouse_dir, char *index_dir) {
   create_sub_index(warehouse_dir, index_dir, "type");
 }
 
+// -------------------------
+// PART 4 (verify binary registry)
+
+#define DB_ENTRY_SIZE 68
+#define DB_NAME_LEN 64
+
+void ensure_index(char *warehouse_dir, char *index_dir) {
+  struct stat st;
+  if (lstat(index_dir, &st) == 0)
+    return;
+  if (errno != ENOENT)
+    ERR("lstat index");
+  create_index(warehouse_dir, index_dir);
+}
+
+void check_entry(size_t expected_size, const char *name) {
+  char name_buf[DB_NAME_LEN + 1];
+  size_t len = strnlen(name, DB_NAME_LEN);
+  memcpy(name_buf, name, len);
+  name_buf[len] = 0;
+  if (len == 0)
+    return;
+
+  char path[PATH_MAX];
+  snprintf(path, sizeof(path), "alchemist_index/by-name/%s", name_buf);
+
+  struct stat st;
+  if (lstat(path, &st) < 0) {
+    if (errno == ENOENT) {
+      printf("Ingredient \"%s\" is missing\n", name_buf);
+      return;
+    }
+    ERR("lstat");
+  }
+
+  if (stat(path, &st) < 0) {
+    if (errno == ENOENT) {
+      printf("Ingredient \"%s\" is missing\n", name_buf);
+      return;
+    }
+    ERR("stat");
+  }
+
+  if (expected_size != st.st_size)
+    printf("Ingredient \"%s\" size mismatch (%d vs %d)\n", name_buf,
+           (int)expected_size, (int)st.st_size);
+}
+
+void verify_database(char *db_path) {
+  int fd = open(db_path, O_RDONLY);
+  if (fd < 0)
+    ERR("open database");
+
+  unsigned int expected_size; // 4 bajty wg formatu bazy, nie size_t (8 B)
+  char name[DB_NAME_LEN];
+
+  struct iovec iov[2] = {
+      {&expected_size, sizeof(expected_size)},
+      {name, DB_NAME_LEN},
+  };
+
+  for (;;) {
+    ssize_t r = readv(fd, iov, 2);
+    if (r == 0)
+      break; // EOF
+    if (r < 0) {
+      if (errno == EINTR)
+        continue;
+      ERR("readv");
+    }
+    if (r < DB_ENTRY_SIZE) {
+      fprintf(stderr, "Truncated database entry: read %zd of %d bytes\n", r,
+              DB_ENTRY_SIZE);
+      close(fd);
+      exit(EXIT_FAILURE);
+    }
+    check_entry(expected_size, name);
+  }
+
+  if (close(fd) < 0)
+    ERR("close database");
+}
+
+// END: PART 4
+
 int main(int argc, char **argv) {
-  if (argc > 1)
+  switch (argc) {
+  case 1:
+    create_index("warehouse", "alchemist_index");
+    break;
+  case 2:
+    ensure_index("warehouse", "alchemist_index");
+    verify_database(argv[1]);
+    break;
+  default:
     usage(argv[0]);
-  create_index("warehouse", "alchemist_index");
+  }
   return EXIT_SUCCESS;
 }
