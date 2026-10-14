@@ -1,0 +1,5 @@
+origin:Dolina Mgieł
+name:Miecz Trola
+rarity:rare
+type:weapon
+incipit:Rare root harvested during full moon
