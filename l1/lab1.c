@@ -187,38 +187,59 @@ void get_relative_path(const char *from_dir, const char *to_path,
         (written > 0 && rel_path[written - 1] != '/') ? "/" : "", t_parts[i]);
   }
 }
+// Etap 2 (by-name): płaskie dowiązanie nazwane wartością pola.
+// Etap 3 (by-rarity / by-type): podkatalog by-<by>/<value> z dowiązaniem
+// nazwanym polem name (przyciętym do 64 bajtów); plik bez pola <by> pomijany.
 void process_warehouse_file(char *index_dir, char *by, char *file_path) {
   Dict *metadata = parse_metadata(file_path);
-  if (metadata != NULL) {
-    const char *value = dict_get(metadata, by);
-    if (value) {
-      char abs_file_path[PATH_MAX];
-      if (realpath(file_path, abs_file_path) != NULL) {
+  if (metadata == NULL)
+    return;
 
-        char ln_target[PATH_MAX];
-        snprintf(ln_target, sizeof(ln_target), "%s/by-%s/%s", index_dir, by,
-                 value);
+  const char *value = dict_get(metadata, by);
+  if (value) {
+    char abs_file_path[PATH_MAX];
+    if (realpath(file_path, abs_file_path) != NULL) {
+      char ln_dir[PATH_MAX];
+      char ln_target[PATH_MAX];
 
-        char ln_dir[PATH_MAX];
+      if (strcmp(by, "name") == 0) {
         snprintf(ln_dir, sizeof(ln_dir), "%s/by-%s", index_dir, by);
-
-        char ln_dir_abs[PATH_MAX];
-        if (realpath(ln_dir, ln_dir_abs) == NULL)
-          ERR("realpath ln_dir");
-
-        char rel_path[PATH_MAX];
-        get_relative_path(ln_dir_abs, abs_file_path, rel_path, sizeof(rel_path));
-
-        if (-1 == symlink(rel_path, ln_target)) {
-          if (errno == EEXIST)
-            ERR("symlink exists");
-          else
-            ERR("symlink failed");
+        snprintf(ln_target, sizeof(ln_target), "%s/%s", ln_dir, value);
+      } else {
+        const char *name = dict_get(metadata, "name");
+        if (name == NULL) {
+          dict_free(metadata);
+          return;
         }
+        char truncated[65];
+        size_t n = strlen(name);
+        if (n > 64)
+          n = 64;
+        memcpy(truncated, name, n);
+        truncated[n] = '\0';
+
+        snprintf(ln_dir, sizeof(ln_dir), "%s/by-%s/%s", index_dir, by, value);
+        if (mkdir(ln_dir, (mode_t)0777) != 0 && errno != EEXIST)
+          ERR("mkdir subfolder");
+        snprintf(ln_target, sizeof(ln_target), "%s/%s", ln_dir, truncated);
+      }
+
+      char ln_dir_abs[PATH_MAX];
+      if (realpath(ln_dir, ln_dir_abs) == NULL)
+        ERR("realpath ln_dir");
+
+      char rel_path[PATH_MAX];
+      get_relative_path(ln_dir_abs, abs_file_path, rel_path, sizeof(rel_path));
+
+      if (-1 == symlink(rel_path, ln_target)) {
+        if (errno == EEXIST)
+          ERR("symlink exists");
+        else
+          ERR("symlink failed");
       }
     }
-    dict_free(metadata);
   }
+  dict_free(metadata);
 }
 void process_warehouse_dir(char *current_dir, char *index_dir, char *by) {
   DIR *dirp;
